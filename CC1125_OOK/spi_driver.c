@@ -69,6 +69,12 @@
  *****************************************************************************/
 #include "spi_driver.h"
 
+SPI_Master_t spiMasterE;											//SPI master on PORT C
+SPI_DataPacket_t dataPacket;										//SPI Data packet
+uint8_t masterSendData[NUM_BYTES];									//Data packet from Master
+uint8_t masterReceivedData[NUM_BYTES];								//Data packet from slave
+bool success = true;												//SPI Result of transmission
+PORT_t *ssPort = &PORTE;											//instantiation for SPI
 
 
 /*! \brief Initialize SPI module as master.
@@ -335,10 +341,8 @@ uint8_t SPI_MasterTransceiveByte(SPI_Master_t *spi, uint8_t TXdata)
 	}
 	/* Read received data. */
 	uint8_t result = spi->module->DATA;
-	/*//*/PORTF_OUTCLR=PIN0_bm|PIN1_bm|PIN2_bm|PIN3_bm|PIN4_bm|PIN5_bm|PIN6_bm|PIN7_bm;
-	PORTF_OUTSET=result;
-	_delay_ms(40);
-	//PORTF_OUTCLR=PIN0_bm|PIN1_bm|PIN2_bm|PIN3_bm|PIN4_bm|PIN5_bm|PIN6_bm|PIN7_bm;
+	PORTF_OUTCLR=PIN0_bm|PIN1_bm|PIN2_bm|PIN3_bm|PIN4_bm|PIN5_bm|PIN6_bm|PIN7_bm;
+	//PORTF_OUTSET=!result;
 	return(result);
 }
 
@@ -409,3 +413,61 @@ bool SPI_MasterTransceivePacket(SPI_Master_t *spi,
 	/* Report success. */
 	return true;
 }
+void SPI_Master_init()
+{
+	 /*  Hardware setup:
+	 * - Connect PC4 to PD4 (SS)
+	 * - Connect PC5 to PD5 (MOSI)
+	 * - Connect PC6 to PD6 (MISO)
+	 * - Connect PC7 to PD7 (SCK)
+	 */
+	PORTE.DIRSET = PIN4_bm;																							//Set SS as output
+	PORTE.DIRSET = PIN5_bm;																							//MOSI as output
+	PORTE.DIRSET = PIN7_bm;																							//SCK as output
+	PORTE.PIN4CTRL = PORT_OPC_WIREDANDPULL_gc;																		//Set PullUp at SS 
+	PORTE.OUTSET = PIN4_bm;																							//Set SS high for no Slave
+	SPI_MasterInit(&spiMasterE,&SPIE,&PORTE,false,SPI_MODE_2_gc,SPI_INTLVL_OFF_gc,true,SPI_PRESCALER_DIV4_gc);		//Initialize device as master (Mode 2, MSB first, 2X speed, prescaler 4)
+	}
+
+void SPI_send8(uint8_t data)
+{
+	SPI_MasterSSLow(ssPort, PIN4_bm);				//Set Slave Select Low	
+	SPI_MasterTransceiveByte(&spiMasterE, data);	//Write and wait for transceiving
+	SPI_MasterSSHigh(ssPort, PIN4_bm);				//Set Slave Select High
+}
+uint8_t SPI_receive8()
+{
+	SPI_MasterCreateDataPacket(&dataPacket,masterSendData,masterReceivedData,NUM_BYTES,&PORTE,PIN4_bm);		
+	SPI_MasterTransceivePacket(&spiMasterE, &dataPacket);	//Wait for reception
+	return masterReceivedData[0];							
+}
+void SPI_send16(uint16_t data)
+{
+	//PORTA_DIRSET = PIN0_bm;
+	PORTF_DIRSET = PIN0_bm|PIN1_bm|PIN2_bm|PIN3_bm|PIN4_bm|PIN5_bm|PIN6_bm|PIN7_bm;
+	//PORTA_OUTSET = PIN0_bm;
+	uint8_t MSdata = ((data>>8) & 0x00FF);		//filter out MS
+	uint8_t LSdata = (data & 0x00FF);			//filter out LS
+	SPI_MasterSSLow(ssPort, PIN4_bm);			//Set Slave Select Low
+	//PORTA_OUTCLR = PIN0_bm;				
+	SPI_MasterTransceiveByte(&spiMasterE, MSdata); 
+	SPI_MasterTransceiveByte(&spiMasterE, LSdata);
+	SPI_MasterSSHigh(ssPort, PIN4_bm);			//Set Slave Select High
+	//PORTA_OUTSET = PIN0_bm;
+}
+
+void SPI_send24(uint32_t data)
+{
+	//PORTA_DIRSET = PIN0_bm;
+	PORTF_DIRSET = PIN0_bm|PIN1_bm|PIN2_bm|PIN3_bm|PIN4_bm|PIN5_bm|PIN6_bm|PIN7_bm;
+	//PORTA_OUTSET = PIN0_bm;
+	uint8_t MSdata = ((data>>8) & 0x00FF);		//filter out MS
+	uint8_t LSdata = (data & 0x00FF);			//filter out LS
+	SPI_MasterSSLow(ssPort, PIN4_bm);			//Set Slave Select Low
+	PORTA_OUTCLR = PIN0_bm;
+	SPI_MasterTransceiveByte(&spiMasterE, MSdata);
+	SPI_MasterTransceiveByte(&spiMasterE, LSdata);
+	SPI_MasterSSHigh(ssPort, PIN4_bm);			//Set Slave Select High
+	PORTA_OUTSET = PIN0_bm;
+}
+

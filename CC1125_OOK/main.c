@@ -34,7 +34,7 @@ unsigned char address[61]="PROPOSAL_ACCEPTED";
 unsigned int pkt_length=48,check=0;
 int transmitFlag=0;
 
-SPI_Master_t spiMasterC;
+SPI_Master_t spiMasterE; //Changed from spiMasterC to spiMasterE
 
 //#define NUM_BYTES 3
 #define USART USARTC0
@@ -133,14 +133,11 @@ bool success;
 
 int main(void)
 {
-    /* Replace with your application code */
-	PORTF_DIRSET=0xFF;
-    while (1) 
-    {
-		_delay_ms(1000);
-		PORTF_OUTCLR=PIN6_bm;
-		_delay_ms(1000);
-		PORTF_OUTSET=PIN6_bm;
-    }
+    SPI_Master_init();
+	uint8_t d=0b01001100;
+	while(true)
+	{
+		SPI_send8(d);
+	}
 }
 
